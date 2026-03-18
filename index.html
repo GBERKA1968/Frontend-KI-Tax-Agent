@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920" />
+  <title>ELIAS — KI-gestützte Steueranalyse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a1628;
+      --bg-card:    #1e2d45;
+      --bg-card2:   #162238;
+      --gold:       #c9a84c;
+      --gold-dim:   #8a6f2e;
+      --gold-light: #e8c97a;
+      --text:       #f5f0e8;
+      --text-dim:   #8fa3bc;
+      --text-muted: #4a6080;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --border:     rgba(201,168,76,0.18);
+      --border-dim: rgba(255,255,255,0.06);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+      opacity: 0.6;
+    }
+
+    /* ─── Typography ───────────────────────────────────────────── */
+    .font-playfair { font-family: 'Playfair Display', serif; }
+    .font-mono     { font-family: 'DM Mono', monospace; }
+
+    /* ─── Layout ───────────────────────────────────────────────── */
+    #app {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ─── Header ───────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 28px 56px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,22,40,0.8);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo-wrap { display: flex; flex-direction: column; gap: 2px; }
+    .logo-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem; font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      line-height: 1;
+    }
+    .logo-sub {
+      font-size: 0.72rem; letter-spacing: 0.22em;
+      color: var(--text-dim); text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex; align-items: center; gap: 24px;
+    }
+
+    #live-clock {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.1rem; color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    #demo-badge {
+      display: none;
+      font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--amber); border: 1px solid rgba(245,158,11,0.35);
+      background: rgba(245,158,11,0.07);
+      padding: 5px 12px; border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+    }
+    #demo-badge.visible { display: block; }
+
+    /* ─── Gold divider line ────────────────────────────────────── */
+    .gold-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.35;
+      margin: 0;
+    }
+
+    /* ─── Screens ──────────────────────────────────────────────── */
+    .screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 56px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    .screen.active {
+      display: flex;
+      opacity: 1;
+    }
+    .screen.fade-in { animation: fadeIn 0.55s ease forwards; }
+    .screen.fade-out { animation: fadeOut 0.4s ease forwards; }
+
+    @keyframes fadeIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+
+    /* ─── Card ─────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.5;
+    }
+
+    /* ─── Screen 1 — Input ─────────────────────────────────────── */
+    #screen-input .card {
+      width: 100%; max-width: 680px;
+    }
+
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem; font-weight: 600;
+      color: var(--text);
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .form-input, .form-select {
+      width: 100%; padding: 13px 16px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .form-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238fa3bc' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+      cursor: pointer;
+    }
+    .form-select option { background: var(--bg-card); }
+    .form-input:focus, .form-select:focus {
+      border-color: var(--gold-dim);
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Drop Zone */
+    #drop-zone {
+      border: 1.5px dashed var(--border-dim);
+      border-radius: 10px;
+      padding: 32px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+      margin-bottom: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    #drop-zone:hover {
+      border-color: var(--gold-dim);
+      background: rgba(201,168,76,0.04);
+    }
+    #drop-zone.drag-over {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.08);
+      box-shadow: 0 0 24px rgba(201,168,76,0.15), inset 0 0 24px rgba(201,168,76,0.05);
+    }
+    #drop-zone.has-file {
+      border-style: solid;
+      border-color: rgba(201,168,76,0.4);
+      background: rgba(201,168,76,0.06);
+    }
+
+    .drop-icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
+    .drop-text {
+      font-size: 0.95rem; color: var(--text-dim);
+    }
+    .drop-text strong { color: var(--gold); font-weight: 600; }
+    .drop-input { display: none; }
+
+    .file-info {
+      display: none;
+      align-items: center; gap: 14px;
+      padding: 14px 18px;
+      background: rgba(201,168,76,0.08);
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+    .file-info.visible { display: flex; }
+    .file-icon { font-size: 1.6rem; flex-shrink: 0; }
+    .file-details { flex: 1; }
+    .file-name {
+      font-size: 0.95rem; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .file-size {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem; color: var(--text-dim);
+    }
+    .file-remove {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 1.1rem;
+      transition: color 0.2s;
+      padding: 4px;
+    }
+    .file-remove:hover { color: var(--red); }
+
+    .btn-primary {
+      width: 100%; padding: 16px;
+      background: var(--gold);
+      color: #0a1628;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; font-weight: 700;
+      letter-spacing: 0.08em;
+      border: none; border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.25s, box-shadow 0.25s, transform 0.15s;
+      margin-top: 28px;
+      position: relative; overflow: hidden;
+    }
+    .btn-primary:not(:disabled):hover {
+      background: var(--gold-light);
+      box-shadow: 0 0 32px rgba(201,168,76,0.4), 0 4px 16px rgba(201,168,76,0.25);
+      transform: translateY(-1px);
+    }
+    .btn-primary:not(:disabled):active { transform: translateY(0); }
+    .btn-primary:disabled {
+      background: var(--text-muted);
+      color: rgba(255,255,255,0.3);
+      cursor: not-allowed;
+    }
+
+    .card-footer {
+      margin-top: 20px;
+      font-size: 0.78rem; color: var(--text-muted);
+      text-align: center; letter-spacing: 0.06em;
+    }
+
+    /* ─── Screen 2 — Processing ────────────────────────────────── */
+    #screen-processing {
+      justify-content: flex-start;
+      padding-top: 60px;
+    }
+
+    .processing-header {
+      text-align: center; margin-bottom: 52px;
+    }
+    .processing-company {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem; font-weight: 600; color: var(--text);
+    }
+    .processing-subtitle {
+      font-size: 0.9rem; color: var(--text-dim);
+      letter-spacing: 0.12em; text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    .pipeline {
+      width: 100%; max-width: 560px;
+      display: flex; flex-direction: column; gap: 0;
+    }
+
+    .pipeline-step {
+      display: flex; align-items: flex-start; gap: 20px;
+      padding: 18px 0;
+      position: relative;
+      opacity: 0.35;
+      transition: opacity 0.4s ease;
+    }
+    .pipeline-step.active { opacity: 1; }
+    .pipeline-step.done   { opacity: 1; }
+
+    /* Connector line between steps */
+    .pipeline-step:not(:last-child)::after {
+      content: '';
+      position: absolute; left: 19px; top: 52px;
+      width: 2px; bottom: -8px;
+      background: linear-gradient(180deg, var(--border) 0%, transparent 100%);
+    }
+    .pipeline-step.done:not(:last-child)::after {
+      background: linear-gradient(180deg, rgba(201,168,76,0.3), rgba(201,168,76,0.08));
+    }
+
+    .step-indicator {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 50%;
+      border: 2px solid var(--text-muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      transition: border-color 0.4s, background 0.4s;
+      position: relative;
+    }
+    .pipeline-step.active .step-indicator {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.1);
+    }
+    .pipeline-step.done .step-indicator {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.15);
+    }
+
+    /* Pulse animation for active step */
+    .pipeline-step.active .step-indicator::after {
+      content: '';
+      position: absolute; inset: -6px;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+      opacity: 0;
+      animation: pulse-ring 1.4s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.85); opacity: 0.7; }
+      100% { transform: scale(1.4);  opacity: 0; }
+    }
+
+    .step-content { flex: 1; padding-top: 8px; }
+    .step-name {
+      font-size: 1rem; font-weight: 600; color: var(--text);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .step-sub {
+      font-size: 0.82rem; color: var(--gold);
+      margin-top: 4px; font-style: italic;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      font-family: 'Source Sans 3', sans-serif;
+    }
+    .pipeline-step.done .step-sub { opacity: 1; }
+
+    .step-status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      animation: blink 1s ease-in-out infinite;
+      display: none;
+    }
+    .pipeline-step.active .step-status-dot { display: block; }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
+
+    .step-check {
+      color: var(--gold); font-size: 1rem;
+      display: none;
+    }
+    .pipeline-step.done .step-check { display: inline; }
+    .pipeline-step.done .step-status-dot { display: none; }
+
+    /* ─── Screen 3 — Results ────────────────────────────────────── */
+    #screen-results {
+      align-items: stretch;
+      justify-content: flex-start;
+      padding-top: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .results-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem; color: var(--text-dim);
+    }
+    .results-company {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.9rem; color: var(--text);
+    }
+    .results-meta {
+      font-size: 0.8rem; color: var(--text-muted);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.06em;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      position: relative; overflow: hidden;
+      opacity: 0; transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.4;
+    }
+    .kpi-card.revealed { opacity: 1; transform: translateY(0); }
+
+    .kpi-label {
+      font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 16px;
+      font-weight: 600;
+    }
+    .kpi-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 2.4rem; font-weight: 500;
+      color: var(--gold);
+      line-height: 1; margin-bottom: 12px;
+    }
+    .kpi-sub { font-size: 0.82rem; color: var(--text-dim); }
+
+    .risk-badge {
+      display: inline-block;
+      font-size: 0.72rem; letter-spacing: 0.12em;
+      font-weight: 700; font-family: 'DM Mono', monospace;
+      padding: 5px 14px; border-radius: 4px;
+      text-transform: uppercase; margin-top: 8px;
+    }
+    .risk-low    { background: rgba(34,197,94,0.15);  color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+    .risk-medium { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .risk-high   { background: rgba(239,68,68,0.15);  color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+
+    .progress-bar-wrap {
+      height: 6px; background: var(--bg-card2);
+      border-radius: 3px; overflow: hidden; margin-top: 10px;
+    }
+    .progress-bar-fill {
+      height: 100%; background: var(--gold);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Section card */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px 36px;
+      margin-bottom: 20px;
+      opacity: 0; transform: translateY(16px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .section-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.3;
+    }
+    .section-card { position: relative; overflow: hidden; }
+    .section-card.revealed { opacity: 1; transform: translateY(0); }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.25rem; font-weight: 600;
+      color: var(--text); margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    /* Mehr-Weniger Table */
+    .mwr-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .mwr-table th {
+      font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-muted); font-weight: 600;
+      padding: 8px 16px 12px;
+      text-align: left; border-bottom: 1px solid var(--border-dim);
+    }
+    .mwr-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      font-size: 0.92rem;
+    }
+    .mwr-table tr:last-child td { border-bottom: none; }
+    .mwr-table tbody tr { position: relative; }
+
+    .mwr-mehr td:first-child { border-left: 3px solid var(--red); }
+    .mwr-weniger td:first-child { border-left: 3px solid var(--green); }
+    .mwr-mehr td:first-child { padding-left: 14px; }
+    .mwr-weniger td:first-child { padding-left: 14px; }
+
+    .amount-mehr    { font-family: 'DM Mono', monospace; color: var(--red);   font-weight: 500; }
+    .amount-weniger { font-family: 'DM Mono', monospace; color: var(--green); font-weight: 500; }
+
+    .direction-badge {
+      font-size: 0.65rem; font-family: 'DM Mono', monospace;
+      letter-spacing: 0.1em; padding: 3px 8px; border-radius: 3px;
+      font-weight: 700;
+    }
+    .badge-mehr    { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+    .badge-weniger { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+
+    .legal-basis {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem; color: var(--text-muted);
+    }
+
+    /* Human Review */
+    .review-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .review-item {
+      background: var(--bg-card2);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: flex; gap: 16px; align-items: flex-start;
+    }
+
+    .priority-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      padding: 4px 10px; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+    }
+    .priority-1 { background: rgba(239,68,68,0.15); color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+    .priority-2 { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .priority-3 { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+
+    .review-account {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem; color: var(--gold);
+      margin-bottom: 4px;
+    }
+    .review-issue {
+      font-size: 0.9rem; color: var(--text); margin-bottom: 6px;
+    }
+    .review-rec {
+      font-size: 0.82rem; color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Download section */
+    .download-section {
+      text-align: center;
+      padding: 36px;
+      margin-bottom: 40px;
+      opacity: 0; transform: translateY(16px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .download-section.revealed { opacity: 1; transform: translateY(0); }
+
+    .btn-download {
+      display: inline-flex; align-items: center; gap: 14px;
+      padding: 18px 48px;
+      background: var(--gold);
+      color: #0a1628;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      border: none; border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.25s;
+      box-shadow: 0 4px 24px rgba(201,168,76,0.2);
+      text-decoration: none;
+    }
+    .btn-download:hover {
+      background: var(--gold-light);
+      box-shadow: 0 8px 40px rgba(201,168,76,0.4);
+      transform: translateY(-2px);
+    }
+    .btn-download-sub {
+      display: block;
+      font-size: 0.78rem; color: var(--text-muted);
+      margin-top: 12px; font-family: 'Source Sans 3', sans-serif;
+      letter-spacing: 0.04em;
+    }
+
+    .btn-outline {
+      display: inline-block;
+      padding: 12px 36px;
+      border: 1.5px solid var(--border);
+      color: var(--text-dim);
+      background: transparent;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.9rem; font-weight: 600;
+      border-radius: 8px; cursor: pointer;
+      transition: all 0.25s;
+      margin-top: 16px;
+    }
+    .btn-outline:hover {
+      border-color: var(--gold-dim);
+      color: var(--text);
+      background: rgba(201,168,76,0.06);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+    /* ─── Responsive (für Beamer 1920x1080) ────────────────────── */
+    @media (min-width: 1600px) {
+      header { padding: 32px 80px; }
+      .logo-name { font-size: 2.2rem; }
+      #screen-input .card { max-width: 720px; }
+      #screen-results { max-width: 1400px; }
+      .kpi-value { font-size: 2.8rem; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ HEADER ═══════════════════════════════════════════════ -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-name">ELIAS</div>
+      <div class="logo-sub">KI-gestützte Steueranalyse</div>
+    </div>
+    <div class="header-right">
+      <div id="demo-badge">DEMO-MODUS</div>
+      <div id="live-clock" class="font-mono">--:--:--</div>
+    </div>
+  </header>
+  <div class="gold-line"></div>
+
+  <!-- ═══ SCREEN 1 — EINGABE ════════════════════════════════════ -->
+  <section id="screen-input" class="screen active fade-in">
+    <div class="card">
+      <div class="card-title font-playfair">Neue Körperschaftsteuer-Analyse</div>
+
+      <div class="form-group">
+        <label class="form-label" for="company-name">Firmenname</label>
+        <input class="form-input" id="company-name" type="text"
+               placeholder="z.B. Müller &amp; Partner GmbH" autocomplete="off" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="tax-year">Steuerjahr</label>
+          <select class="form-select" id="tax-year">
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="company-type">Gesellschaftsform</label>
+          <select class="form-select" id="company-type">
+            <option value="GmbH">GmbH</option>
+            <option value="AG">AG</option>
+            <option value="Holding">Holding</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Finanzdaten hochladen</label>
+        <div id="drop-zone"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)"
+             onclick="document.getElementById('file-input').click()">
+          <span class="drop-icon">⬆</span>
+          <div class="drop-text">
+            <strong>Datei hierher ziehen</strong> oder klicken zum Auswählen
+          </div>
+        </div>
+        <input class="drop-input" id="file-input" type="file"
+               accept=".json,.csv,.xlsx,.xls,.docx,.pdf"
+               onchange="handleFileSelect(this.files[0])" />
+        <div class="file-info" id="file-info">
+          <span class="file-icon" id="file-icon">📄</span>
+          <div class="file-details">
+            <div class="file-name" id="file-name">—</div>
+            <div class="file-size font-mono" id="file-size">—</div>
+          </div>
+          <button class="file-remove" onclick="removeFile()" title="Entfernen">✕</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-start" disabled onclick="startAnalysis()">
+        Analyse starten
+      </button>
+
+      <div class="card-footer">Unterstützte Formate: Excel · PDF · Word · CSV · JSON</div>
+    </div>
+  </section>
+
+  <!-- ═══ SCREEN 2 — VERARBEITUNG ══════════════════════════════ -->
+  <section id="screen-processing" class="screen">
+    <div class="processing-header">
+      <div class="processing-company font-playfair" id="proc-company">—</div>
+      <div class="processing-subtitle">wird analysiert&#8203;&#8203;&#8203;<span id="proc-dots"></span></div>
+    </div>
+
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-step" id="step-0">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            Eingabe normalisieren
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-0"></div>
+        </div>
+      </div>
+      <div class="pipeline-step" id="step-1">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            Konten klassifizieren
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-1"></div>
+        </div>
+      </div>
+      <div class="pipeline-step" id="step-2">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            Rule Engine (deterministisch)
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-2">8 von 14 Konten direkt gelöst</div>
+        </div>
+      </div>
+      <div class="pipeline-step" id="step-3">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            KI-Analyse (komplexe Fälle)
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-3">6 Konten mit GPT-4o bewertet</div>
+        </div>
+      </div>
+      <div class="pipeline-step" id="step-4">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            Plausibilitätschecks
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-4"></div>
+        </div>
+      </div>
+      <div class="pipeline-step" id="step-5">
+        <div class="step-indicator">⬡</div>
+        <div class="step-content">
+          <div class="step-name">
+            Report generieren
+            <span class="step-status-dot"></span>
+            <span class="step-check">✓</span>
+          </div>
+          <div class="step-sub" id="sub-5"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SCREEN 3 — ERGEBNIS ═══════════════════════════════════ -->
+  <section id="screen-results" class="screen">
+
+    <div class="results-header">
+      <div>
+        <div class="results-title font-playfair">Analyse abgeschlossen —</div>
+        <div class="results-company font-playfair" id="res-company">—</div>
+      </div>
+      <div class="results-meta">
+        <div id="res-year-type">—</div>
+        <div id="res-run-id" style="margin-top:4px; color:var(--text-muted)">—</div>
+      </div>
+    </div>
+
+    <!-- KPI Kacheln -->
+    <div class="kpi-grid">
+
+      <div class="kpi-card" id="kpi-0">
+        <div class="kpi-label">Körperschaftsteuer</div>
+        <div class="kpi-value font-mono" id="kpi-kost">€ 0</div>
+        <div class="kpi-sub">Berechneter Steuerbetrag</div>
+      </div>
+
+      <div class="kpi-card" id="kpi-1">
+        <div class="kpi-label">Risk Score</div>
+        <div class="kpi-value font-mono" id="kpi-risk-val">—</div>
+        <div id="kpi-risk-badge"></div>
+      </div>
+
+      <div class="kpi-card" id="kpi-2">
+        <div class="kpi-label">Automatisierungsgrad</div>
+        <div class="kpi-value font-mono" id="kpi-auto-val">—</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="kpi-auto-bar"></div>
+        </div>
+        <div class="kpi-sub" style="margin-top:8px">regelbasiert ohne KI gelöst</div>
+      </div>
+
+    </div>
+
+    <!-- Mehr-Weniger Rechnung -->
+    <div class="section-card" id="sec-mwr">
+      <div class="section-title font-playfair">
+        <span>Steuerliche Korrekturen</span>
+      </div>
+      <table class="mwr-table">
+        <thead>
+          <tr>
+            <th>Position</th>
+            <th>Art</th>
+            <th>Betrag</th>
+            <th>Rechtsgrundlage</th>
+          </tr>
+        </thead>
+        <tbody id="mwr-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Human Review -->
+    <div class="section-card" id="sec-review">
+      <div class="section-title font-playfair" id="review-title">
+        Positionen zur manuellen Prüfung
+      </div>
+      <div class="review-list" id="review-list"></div>
+    </div>
+
+    <!-- Download -->
+    <div class="download-section" id="sec-download">
+      <button class="btn-download" id="btn-download" onclick="downloadReport()">
+        <span>⬇</span>
+        <span>DOCX-Report herunterladen</span>
+      </button>
+      <div class="btn-download-sub">
+        Vollständiger Bericht inkl. Audit Trail und Rechtsnachweisen
+      </div>
+      <br/>
+      <button class="btn-outline" onclick="resetToStart()">Neue Analyse starten</button>
+    </div>
+
+  </section>
+
+</div><!-- /#app -->
+
+<script>
+/* ═════════════════════════════════════════════════════════════════
+   STATE
+   ═════════════════════════════════════════════════════════════════ */
+let state = {
+  company: '',
+  year: '',
+  type: '',
+  file: null,
+  runId: null,
+  result: null,
+  demoMode: false,
+  pollInterval: null,
+  dotsInterval: null,
+};
+
+/* ═════════════════════════════════════════════════════════════════
+   LIVE CLOCK
+   ═════════════════════════════════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('live-clock').textContent =
+    now.toLocaleTimeString('de-AT', { hour12: false });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ═════════════════════════════════════════════════════════════════
+   FILE HANDLING
+   ═════════════════════════════════════════════════════════════════ */
+const FORMAT_ICONS = {
+  xlsx: '📊', xls: '📊',
+  pdf:  '📄',
+  docx: '📝', doc: '📝',
+  csv:  '🗂', json: '🗂',
+};
+
+function getExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
+function formatBytes(bytes) {
+  if (bytes < 1024)       return bytes + ' B';
+  if (bytes < 1048576)    return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+function getIcon(name) { return FORMAT_ICONS[getExt(name)] || '📁'; }
+
+function handleFileSelect(file) {
+  if (!file) return;
+  state.file = file;
+  document.getElementById('file-icon').textContent = getIcon(file.name);
+  document.getElementById('file-name').textContent  = file.name;
+  document.getElementById('file-size').textContent  = formatBytes(file.size);
+  document.getElementById('file-info').classList.add('visible');
+  document.getElementById('drop-zone').classList.add('has-file');
+  document.getElementById('btn-start').disabled = false;
+}
+
+function removeFile() {
+  state.file = null;
+  document.getElementById('file-info').classList.remove('visible');
+  document.getElementById('drop-zone').classList.remove('has-file');
+  document.getElementById('file-input').value = '';
+  document.getElementById('btn-start').disabled = true;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+function handleDragLeave(e) {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   SCREEN TRANSITIONS
+   ═════════════════════════════════════════════════════════════════ */
+function showScreen(id) {
+  const screens = document.querySelectorAll('.screen');
+  screens.forEach(s => {
+    if (s.id !== id) {
+      s.classList.remove('active');
+      s.style.display = 'none';
+    }
+  });
+  const target = document.getElementById(id);
+  target.style.display = 'flex';
+  target.classList.remove('fade-in');
+  void target.offsetWidth; // reflow
+  target.classList.add('active', 'fade-in');
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   SCREEN 1 → 2: START ANALYSIS
+   ═════════════════════════════════════════════════════════════════ */
+function startAnalysis() {
+  state.company = document.getElementById('company-name').value.trim() || 'Unbekannte GmbH';
+  state.year    = document.getElementById('tax-year').value;
+  state.type    = document.getElementById('company-type').value;
+  state.runId   = 'RUN-' + Date.now();
+  state.demoMode = false;
+  document.getElementById('demo-badge').classList.remove('visible');
+
+  showScreen('screen-processing');
+  document.getElementById('proc-company').textContent = state.company;
+  startDotsAnimation();
+  runPipeline();
+  startPolling();
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   DOTS ANIMATION
+   ═════════════════════════════════════════════════════════════════ */
+function startDotsAnimation() {
+  let i = 0;
+  const dots = ['', '.', '..', '...'];
+  state.dotsInterval = setInterval(() => {
+    document.getElementById('proc-dots').textContent = dots[i % 4];
+    i++;
+  }, 500);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   PIPELINE ANIMATION
+   Timings: 1.5, 3.0, 5.0, 8.0, 10.0, 12.0 s
+   ═════════════════════════════════════════════════════════════════ */
+const STEP_TIMINGS = [1500, 3000, 5000, 8000, 10000, 12000];
+
+function runPipeline() {
+  // reset all steps
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById('step-' + i);
+    el.classList.remove('active', 'done');
+  }
+
+  // activate step 0 immediately
+  activateStep(0);
+
+  STEP_TIMINGS.forEach((ms, idx) => {
+    setTimeout(() => {
+      completeStep(idx);
+      if (idx + 1 < 6) activateStep(idx + 1);
+    }, ms);
+  });
+
+  // After last step → show results
+  setTimeout(() => {
+    clearInterval(state.dotsInterval);
+    clearInterval(state.pollInterval);
+    if (!state.result) {
+      // no webhook response → use fallback
+      activateDemoMode();
+    }
+    transitionToResults();
+  }, 12500);
+}
+
+function activateStep(idx) {
+  document.getElementById('step-' + idx).classList.add('active');
+}
+function completeStep(idx) {
+  const el = document.getElementById('step-' + idx);
+  el.classList.remove('active');
+  el.classList.add('done');
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   WEBHOOK POLLING
+   ═════════════════════════════════════════════════════════════════ */
+function startPolling() {
+  state.pollInterval = setInterval(async () => {
+    try {
+      const url = `http://localhost:5678/webhook/tax-status?run_id=${state.runId}`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.status === 'complete' && data.result) {
+          state.result = data.result;
+          clearInterval(state.pollInterval);
+        }
+      }
+    } catch (_) {
+      // Webhook not reachable — demo fallback will kick in at end of pipeline
+    }
+  }, 3000);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   DEMO FALLBACK DATA
+   ═════════════════════════════════════════════════════════════════ */
+const DEMO_DATA = {
+  run_id: 'DEMO-001',
+  koerperschaftsteuer: 23450,
+  risk_score: 18,
+  risk_level: 'LOW',
+  automation_rate: 73,
+  mehr_weniger_rechnung: [
+    {
+      position: 'Bewirtungsaufwand (50% Kürzung)',
+      amount: 1200,
+      direction: 'MEHR',
+      legal_basis: '§20 EStG iVm §7 Abs 2 KStG'
+    },
+    {
+      position: 'Beteiligungserträge steuerfrei',
+      amount: 45000,
+      direction: 'WENIGER',
+      legal_basis: '§10 Abs 1 KStG'
+    },
+    {
+      position: 'Nicht abzugsfähige Strafen',
+      amount: 800,
+      direction: 'MEHR',
+      legal_basis: '§12 Abs 1 Z 4 KStG'
+    }
+  ],
+  human_review_items: [
+    {
+      account_number: '0750',
+      issue: 'Verdeckte Ausschüttung möglich (Darlehen an GF)',
+      recommendation: 'Fremdüblichkeit und Rückzahlungsvereinbarung prüfen',
+      priority: 1
+    },
+    {
+      account_number: '8000',
+      issue: 'Beteiligungsertragsbefreiung §10 KStG — Haltedauer grenzwertig',
+      recommendation: 'Anschaffungsdatum aus Beteiligungsspiegel verifizieren',
+      priority: 2
+    }
+  ]
+};
+
+function activateDemoMode() {
+  state.result   = DEMO_DATA;
+  state.demoMode = true;
+  document.getElementById('demo-badge').classList.add('visible');
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   SCREEN 2 → 3: RESULTS
+   ═════════════════════════════════════════════════════════════════ */
+function transitionToResults() {
+  const r = state.result;
+  if (!r) { activateDemoMode(); }
+  const result = state.result;
+
+  // Header
+  document.getElementById('res-company').textContent  = state.company;
+  document.getElementById('res-year-type').textContent =
+    state.year + ' · ' + state.type;
+  document.getElementById('res-run-id').textContent =
+    'Run-ID: ' + (result.run_id || state.runId);
+
+  // Risk badge
+  const riskBadge = document.getElementById('kpi-risk-badge');
+  const rs = result.risk_score;
+  let riskClass, riskLabel;
+  if (rs <= 25)      { riskClass = 'risk-low';    riskLabel = 'NIEDRIG'; }
+  else if (rs <= 50) { riskClass = 'risk-medium'; riskLabel = 'MITTEL'; }
+  else               { riskClass = 'risk-high';   riskLabel = 'HOCH'; }
+  document.getElementById('kpi-risk-val').textContent = rs;
+  riskBadge.innerHTML =
+    `<span class="risk-badge ${riskClass}">${riskLabel}</span>`;
+
+  // Automation
+  document.getElementById('kpi-auto-val').textContent =
+    result.automation_rate + '%';
+
+  // Mehr-Weniger table
+  const tbody = document.getElementById('mwr-tbody');
+  tbody.innerHTML = '';
+  (result.mehr_weniger_rechnung || []).forEach(row => {
+    const isMehr = row.direction === 'MEHR';
+    const tr = document.createElement('tr');
+    tr.className = isMehr ? 'mwr-mehr' : 'mwr-weniger';
+    tr.innerHTML = `
+      <td>${escHtml(row.position)}</td>
+      <td><span class="direction-badge ${isMehr ? 'badge-mehr' : 'badge-weniger'}">${row.direction}</span></td>
+      <td class="${isMehr ? 'amount-mehr' : 'amount-weniger'}">€ ${formatNum(row.amount)}</td>
+      <td class="legal-basis">${escHtml(row.legal_basis)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Human Review
+  const reviewItems = result.human_review_items || [];
+  document.getElementById('review-title').innerHTML =
+    `<span class="font-playfair">${reviewItems.length} Positionen zur manuellen Prüfung</span>`;
+  const reviewList = document.getElementById('review-list');
+  reviewList.innerHTML = '';
+  reviewItems.forEach(item => {
+    const pClass = 'priority-' + Math.min(item.priority, 3);
+    const pLabel = 'P' + item.priority;
+    const div = document.createElement('div');
+    div.className = 'review-item';
+    div.innerHTML = `
+      <span class="priority-badge ${pClass}">${pLabel}</span>
+      <div>
+        <div class="review-account font-mono">Konto ${escHtml(item.account_number)}</div>
+        <div class="review-issue">${escHtml(item.issue)}</div>
+        <div class="review-rec">${escHtml(item.recommendation)}</div>
+      </div>
+    `;
+    reviewList.appendChild(div);
+  });
+
+  showScreen('screen-results');
+
+  // Staggered reveal + count-up
+  revealResults(result);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   STAGGERED REVEAL + COUNT-UP
+   ═════════════════════════════════════════════════════════════════ */
+function revealResults(result) {
+  // KPI cards
+  setTimeout(() => {
+    document.getElementById('kpi-0').classList.add('revealed');
+    countUp('kpi-kost', result.koerperschaftsteuer, 1800, v => '€ ' + formatNum(v));
+  }, 200);
+
+  setTimeout(() => {
+    document.getElementById('kpi-1').classList.add('revealed');
+  }, 450);
+
+  setTimeout(() => {
+    document.getElementById('kpi-2').classList.add('revealed');
+    // progress bar
+    requestAnimationFrame(() => {
+      document.getElementById('kpi-auto-bar').style.width = result.automation_rate + '%';
+    });
+  }, 700);
+
+  // Sections
+  setTimeout(() => document.getElementById('sec-mwr').classList.add('revealed'), 950);
+  setTimeout(() => document.getElementById('sec-review').classList.add('revealed'), 1200);
+  setTimeout(() => document.getElementById('sec-download').classList.add('revealed'), 1500);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   COUNT-UP ANIMATION
+   ═════════════════════════════════════════════════════════════════ */
+function countUp(elId, target, duration, formatter) {
+  const el = document.getElementById(elId);
+  const start = performance.now();
+  function step(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(eased * target);
+    el.textContent = formatter ? formatter(current) : current;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   DOWNLOAD
+   ═════════════════════════════════════════════════════════════════ */
+function downloadReport() {
+  const url = `http://localhost:5678/webhook/tax-report-download?run_id=${
+    state.result ? state.result.run_id || state.runId : state.runId
+  }`;
+  window.open(url, '_blank');
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   RESET
+   ═════════════════════════════════════════════════════════════════ */
+function resetToStart() {
+  // Reset state
+  state = {
+    company: '', year: '', type: '', file: null,
+    runId: null, result: null, demoMode: false,
+    pollInterval: null, dotsInterval: null,
+  };
+
+  // Reset form
+  document.getElementById('company-name').value = '';
+  document.getElementById('tax-year').value    = '2024';
+  document.getElementById('company-type').value = 'GmbH';
+  removeFile();
+
+  // Reset pipeline
+  for (let i = 0; i < 6; i++) {
+    document.getElementById('step-' + i).classList.remove('active', 'done');
+  }
+
+  // Reset result cards
+  ['kpi-0','kpi-1','kpi-2','sec-mwr','sec-review','sec-download'].forEach(id => {
+    document.getElementById(id).classList.remove('revealed');
+  });
+  document.getElementById('kpi-auto-bar').style.width = '0%';
+  document.getElementById('demo-badge').classList.remove('visible');
+
+  showScreen('screen-input');
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   UTILS
+   ═════════════════════════════════════════════════════════════════ */
+function formatNum(n) {
+  return Number(n).toLocaleString('de-AT');
+}
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
