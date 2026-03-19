@@ -428,7 +428,7 @@
 
     /* KPI Grid */
     .kpi-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
       margin-bottom: 24px;
     }
 
@@ -848,6 +848,12 @@
         <div class="kpi-sub" style="margin-top:8px">regelbasiert ohne KI gelöst</div>
       </div>
 
+      <div class="kpi-card" id="kpi-3">
+        <div class="kpi-label">Steuerpflichtiges Einkommen</div>
+        <div class="kpi-value font-mono" id="kpi-taxincome">—</div>
+        <div class="kpi-sub">Bemessungsgrundlage KöSt</div>
+      </div>
+
     </div>
 
     <!-- Mehr-Weniger Rechnung -->
@@ -895,6 +901,11 @@
 
 <script>
 /* ═════════════════════════════════════════════════════════════════
+   WEBHOOK
+   ═════════════════════════════════════════════════════════════════ */
+const WEBHOOK_URL = 'http://localhost:5678/webhook/tax-report';
+
+/* ═════════════════════════════════════════════════════════════════
    STATE
    ═════════════════════════════════════════════════════════════════ */
 let state = {
@@ -905,7 +916,6 @@ let state = {
   runId: null,
   result: null,
   demoMode: false,
-  pollInterval: null,
   dotsInterval: null,
 };
 
@@ -1004,7 +1014,7 @@ function startAnalysis() {
   document.getElementById('proc-company').textContent = state.company;
   startDotsAnimation();
   runPipeline();
-  startPolling();
+  callWebhook();
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1042,16 +1052,23 @@ function runPipeline() {
     }, ms);
   });
 
-  // After last step → show results
+  // After last step → dynamically wait for webhook result (max 120s total)
   setTimeout(() => {
     clearInterval(state.dotsInterval);
-    clearInterval(state.pollInterval);
-    if (!state.result) {
-      // no webhook response → use fallback
-      activateDemoMode();
-    }
-    transitionToResults();
-  }, 12500);
+    let waited = 0;
+    const maxAdditionalWait = 108000; // 120s total minus 12s animation
+    (function checkResult() {
+      if (state.result) {
+        transitionToResults();
+      } else if (waited >= maxAdditionalWait) {
+        activateDemoMode();
+        transitionToResults();
+      } else {
+        waited += 300;
+        setTimeout(checkResult, 300);
+      }
+    })();
+  }, 12000);
 }
 
 function activateStep(idx) {
@@ -1064,24 +1081,45 @@ function completeStep(idx) {
 }
 
 /* ═════════════════════════════════════════════════════════════════
-   WEBHOOK POLLING
+   WEBHOOK CALL (synchron — wartet auf Eliasv2-Antwort, max 120s)
    ═════════════════════════════════════════════════════════════════ */
-function startPolling() {
-  state.pollInterval = setInterval(async () => {
-    try {
-      const url = `http://localhost:5678/webhook/tax-status?run_id=${state.runId}`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && data.status === 'complete' && data.result) {
-          state.result = data.result;
-          clearInterval(state.pollInterval);
-        }
+async function callWebhook() {
+  if (!state.file) return; // kein File → Demo-Fallback greift nach Animation
+  try {
+    const csvContent = await readFileAsText(state.file);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        csv_content: csvContent,
+        company_name: state.company,
+        company_type: state.type,
+        tax_year: state.year,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.success) {
+        if (data.run_id) state.runId = data.run_id;
+        state.result = data;
       }
-    } catch (_) {
-      // Webhook not reachable — demo fallback will kick in at end of pipeline
     }
-  }, 3000);
+  } catch (_) {
+    // Webhook nicht erreichbar → Demo-Fallback greift nach Animation
+  }
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsText(file, 'UTF-8');
+  });
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1165,6 +1203,14 @@ function transitionToResults() {
   document.getElementById('kpi-auto-val').textContent =
     result.automation_rate + '%';
 
+  // Steuerpflichtiges Einkommen
+  const taxIncomeEl = document.getElementById('kpi-taxincome');
+  if (result.steuerpflichtiges_einkommen != null) {
+    taxIncomeEl.textContent = '€ ' + formatNum(result.steuerpflichtiges_einkommen);
+  } else {
+    taxIncomeEl.textContent = '—';
+  }
+
   // Mehr-Weniger table
   const tbody = document.getElementById('mwr-tbody');
   tbody.innerHTML = '';
@@ -1231,10 +1277,17 @@ function revealResults(result) {
     });
   }, 700);
 
+  setTimeout(() => {
+    document.getElementById('kpi-3').classList.add('revealed');
+    if (result.steuerpflichtiges_einkommen != null) {
+      countUp('kpi-taxincome', result.steuerpflichtiges_einkommen, 1800, v => '€ ' + formatNum(v));
+    }
+  }, 950);
+
   // Sections
-  setTimeout(() => document.getElementById('sec-mwr').classList.add('revealed'), 950);
-  setTimeout(() => document.getElementById('sec-review').classList.add('revealed'), 1200);
-  setTimeout(() => document.getElementById('sec-download').classList.add('revealed'), 1500);
+  setTimeout(() => document.getElementById('sec-mwr').classList.add('revealed'), 1200);
+  setTimeout(() => document.getElementById('sec-review').classList.add('revealed'), 1450);
+  setTimeout(() => document.getElementById('sec-download').classList.add('revealed'), 1700);
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1288,7 +1341,7 @@ function resetToStart() {
   }
 
   // Reset result cards
-  ['kpi-0','kpi-1','kpi-2','sec-mwr','sec-review','sec-download'].forEach(id => {
+  ['kpi-0','kpi-1','kpi-2','kpi-3','sec-mwr','sec-review','sec-download'].forEach(id => {
     document.getElementById(id).classList.remove('revealed');
   });
   document.getElementById('kpi-auto-bar').style.width = '0%';
