@@ -992,7 +992,11 @@ let state = {
   dotsInterval: null,
   timerInterval: null,
   statusInterval: null,
+  waitInterval: null,
   startTime: null,
+  webhookDone: false,
+  pipelineDone: false,
+  transitioned: false,
 };
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1187,22 +1191,28 @@ function runPipeline() {
     }, ms);
   });
 
-  // After last step → dynamically wait for webhook result (max 120s total)
+  // After last step → signal pipeline done, then check webhook
   setTimeout(() => {
     clearInterval(state.dotsInterval);
-    let waited = 0;
-    const maxAdditionalWait = 108000; // 120s total minus 12s animation
-    (function checkResult() {
-      if (state.result) {
-        transitionToResults();
-      } else if (waited >= maxAdditionalWait) {
-        activateDemoMode();
-        transitionToResults();
-      } else {
-        waited += 300;
-        setTimeout(checkResult, 300);
-      }
-    })();
+    state.pipelineDone = true;
+    if (state.webhookDone || state.result) {
+      transitionToResults(); // Webhook war schon fertig → sofort wechseln
+    } else {
+      // Warte auf Webhook (max 120s ab Pipeline-Ende)
+      const waitStart = Date.now();
+      state.waitInterval = setInterval(() => {
+        if (state.result) {
+          clearInterval(state.waitInterval);
+          state.waitInterval = null;
+          transitionToResults();
+        } else if (Date.now() - waitStart > 120000) {
+          clearInterval(state.waitInterval);
+          state.waitInterval = null;
+          activateDemoMode();
+          transitionToResults();
+        }
+      }, 300);
+    }
   }, 12000);
 }
 
@@ -1244,7 +1254,11 @@ async function callWebhook() {
       }
     }
   } catch (_) {
-    // Webhook nicht erreichbar → Demo-Fallback greift nach Animation
+    // Webhook nicht erreichbar → Demo-Fallback greift nach Pipeline-Ende
+  }
+  state.webhookDone = true;
+  if (state.pipelineDone) {
+    transitionToResults(); // Pipeline war schon fertig → sofort wechseln
   }
 }
 
@@ -1312,6 +1326,8 @@ function activateDemoMode() {
    SCREEN 2 → 3: RESULTS
    ═════════════════════════════════════════════════════════════════ */
 function transitionToResults() {
+  if (state.transitioned) return;
+  state.transitioned = true;
   if (!state.result) { activateDemoMode(); }
   const result = state.result;
 
@@ -1461,12 +1477,15 @@ function resetToStart() {
   clearInterval(state.dotsInterval);
   clearInterval(state.timerInterval);
   clearInterval(state.statusInterval);
+  clearInterval(state.waitInterval);
 
   // Reset state
   state = {
     company: '', year: '', type: '', file: null,
     runId: null, result: null, demoMode: false,
-    dotsInterval: null, timerInterval: null, statusInterval: null, startTime: null,
+    dotsInterval: null, timerInterval: null, statusInterval: null,
+    waitInterval: null, startTime: null,
+    webhookDone: false, pipelineDone: false, transitioned: false,
   };
 
   // Reset loading indicator DOM
