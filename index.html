@@ -1229,34 +1229,50 @@ function completeStep(idx) {
    WEBHOOK CALL (synchron — wartet auf Eliasv2-Antwort, max 120s)
    ═════════════════════════════════════════════════════════════════ */
 async function callWebhook() {
-  if (!state.file) return; // kein File → Demo-Fallback greift nach Animation
+  if (!state.file) {
+    console.log('callWebhook: kein File → webhookDone sofort setzen');
+    state.webhookDone = true;
+    if (state.pipelineDone) transitionToResults();
+    return;
+  }
   try {
     const csvContent = await readFileAsText(state.file);
+    const payload = {
+      csv_content: csvContent,
+      company_name: state.company,
+      company_type: state.type,
+      tax_year: state.year,
+    };
+    console.log('Sending to webhook:', WEBHOOK_URL);
+    console.log('Payload size:', JSON.stringify(payload).length, 'bytes');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        csv_content: csvContent,
-        company_name: state.company,
-        company_type: state.type,
-        tax_year: state.year,
-      }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+    console.log('Webhook status:', resp.status);
     if (resp.ok) {
       const data = await resp.json();
+      console.log('Webhook data:', JSON.stringify(data).substring(0, 300));
       if (data && data.success) {
         if (data.run_id) state.runId = data.run_id;
         state.result = data;
+        console.log('state.result gesetzt, run_id:', state.result.run_id);
+      } else {
+        console.warn('Webhook: success=false oder kein success-Feld', data);
       }
+    } else {
+      console.warn('Webhook HTTP-Fehler:', resp.status, resp.statusText);
     }
-  } catch (_) {
-    // Webhook nicht erreichbar → Demo-Fallback greift nach Pipeline-Ende
+  } catch (err) {
+    console.warn('Webhook nicht erreichbar:', err.message);
   }
   state.webhookDone = true;
+  console.log('webhookDone=true, pipelineDone=', state.pipelineDone, ', result=', !!state.result);
   if (state.pipelineDone) {
     transitionToResults(); // Pipeline war schon fertig → sofort wechseln
   }
@@ -1328,6 +1344,7 @@ function activateDemoMode() {
 function transitionToResults() {
   if (state.transitioned) return;
   state.transitioned = true;
+  console.log('transitionToResults: result=', !!state.result, 'run_id=', state.result && state.result.run_id);
   if (!state.result) { activateDemoMode(); }
   const result = state.result;
 
@@ -1463,9 +1480,7 @@ function countUp(elId, target, duration, formatter) {
    DOWNLOAD
    ═════════════════════════════════════════════════════════════════ */
 function downloadReport() {
-  const url = `http://localhost:5678/webhook/tax-report-download?run_id=${
-    state.result ? state.result.run_id || state.runId : state.runId
-  }`;
+  const url = WEBHOOK_URL + '-download';
   window.open(url, '_blank');
 }
 
