@@ -713,7 +713,7 @@
           </div>
         </div>
         <input class="drop-input" id="file-input" type="file"
-               accept=".json,.csv,.xlsx,.xls,.docx,.pdf"
+               accept=".txt,.csv,.xlsx,.xls,.pdf,.json,.docx"
                onchange="handleFileSelect(this.files[0])" />
         <div class="file-info" id="file-info">
           <span class="file-icon" id="file-icon">📄</span>
@@ -729,7 +729,7 @@
         Analyse starten
       </button>
 
-      <div class="card-footer">Unterstützte Formate: Excel · PDF · Word · CSV · JSON</div>
+      <div class="card-footer">Unterstützte Formate: Excel · PDF · Word · CSV · TXT · JSON</div>
     </div>
   </section>
 
@@ -937,7 +937,7 @@ const FORMAT_ICONS = {
   xlsx: '📊', xls: '📊',
   pdf:  '📄',
   docx: '📝', doc: '📝',
-  csv:  '🗂', json: '🗂',
+  csv:  '🗂', json: '🗂', txt: '🗂',
 };
 
 function getExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
