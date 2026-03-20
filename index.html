@@ -353,18 +353,83 @@
       background: rgba(201,168,76,0.15);
     }
 
-    /* Pulse animation for active step */
+    /* Pulse animation for active step — verstärkt */
     .pipeline-step.active .step-indicator::after {
       content: '';
-      position: absolute; inset: -6px;
+      position: absolute; inset: -12px;
       border-radius: 50%;
       border: 2px solid var(--gold);
       opacity: 0;
-      animation: pulse-ring 1.4s ease-out infinite;
+      animation: pulse-ring 2.2s ease-out infinite;
+      box-shadow: 0 0 14px rgba(201,168,76,0.45);
     }
     @keyframes pulse-ring {
-      0%   { transform: scale(0.85); opacity: 0.7; }
-      100% { transform: scale(1.4);  opacity: 0; }
+      0%   { transform: scale(0.78); opacity: 0.85; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+
+    /* ─── Processing Footer (Timer · Shimmer · Status) ─────────── */
+    .processing-footer {
+      width: 100%; max-width: 560px;
+      margin-top: 36px;
+      display: flex; flex-direction: column; gap: 16px;
+      align-items: center;
+    }
+
+    .proc-timer {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+
+    .proc-shimmer-wrap {
+      width: 100%; height: 3px;
+      background: rgba(201,168,76,0.12);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .proc-shimmer-bar {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: -55%; width: 55%;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(201,168,76,0.4) 35%,
+        var(--gold) 50%,
+        rgba(201,168,76,0.4) 65%,
+        transparent 100%
+      );
+      border-radius: 2px;
+      animation: shimmer 2s ease-in-out infinite;
+    }
+    .proc-shimmer-bar.complete {
+      animation: none;
+      left: 0; width: 100%;
+      background: var(--gold);
+      transition: left 0.4s ease, width 0.4s ease, background 0.3s ease;
+    }
+    @keyframes shimmer {
+      0%   { left: -55%; }
+      100% { left: 100%; }
+    }
+
+    .proc-status {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.85rem;
+      font-style: italic;
+      color: var(--gold);
+      text-align: center;
+      opacity: 1;
+      transition: opacity 0.38s ease;
+      min-height: 1.3em;
+    }
+    .proc-status.fading { opacity: 0; }
+    .proc-status.done {
+      color: var(--green);
+      font-style: normal;
+      font-weight: 600;
     }
 
     .step-content { flex: 1; padding-top: 8px; }
@@ -808,6 +873,14 @@
         </div>
       </div>
     </div>
+
+    <div class="processing-footer" id="processing-footer">
+      <div class="proc-timer" id="proc-timer">⏱ Verarbeitung läuft seit 0,0 Sekunden...</div>
+      <div class="proc-shimmer-wrap">
+        <div class="proc-shimmer-bar" id="proc-shimmer-bar"></div>
+      </div>
+      <div class="proc-status" id="proc-status">Dokumente werden analysiert...</div>
+    </div>
   </section>
 
   <!-- ═══ SCREEN 3 — ERGEBNIS ═══════════════════════════════════ -->
@@ -917,6 +990,9 @@ let state = {
   result: null,
   demoMode: false,
   dotsInterval: null,
+  timerInterval: null,
+  statusInterval: null,
+  startTime: null,
 };
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1013,6 +1089,7 @@ function startAnalysis() {
   showScreen('screen-processing');
   document.getElementById('proc-company').textContent = state.company;
   startDotsAnimation();
+  startLoadingIndicator();
   runPipeline();
   callWebhook();
 }
@@ -1027,6 +1104,64 @@ function startDotsAnimation() {
     document.getElementById('proc-dots').textContent = dots[i % 4];
     i++;
   }, 500);
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   LOADING INDICATOR (Timer · Status rotation)
+   ═════════════════════════════════════════════════════════════════ */
+const STATUS_MESSAGES = [
+  'Dokumente werden analysiert...',
+  'Rule Engine prüft steuerliche Regeln...',
+  'KI bewertet komplexe Sachverhalte...',
+  'Plausibilitätsprüfung läuft...',
+  'Report wird erstellt...',
+];
+
+function startLoadingIndicator() {
+  state.startTime = Date.now();
+
+  // Reset DOM to initial state
+  const shimmerBar = document.getElementById('proc-shimmer-bar');
+  shimmerBar.classList.remove('complete');
+  const statusEl = document.getElementById('proc-status');
+  statusEl.classList.remove('fading', 'done');
+  statusEl.textContent = STATUS_MESSAGES[0];
+
+  // Timer: updates every 100ms, one decimal place
+  state.timerInterval = setInterval(() => {
+    const secs = (Date.now() - state.startTime) / 1000;
+    document.getElementById('proc-timer').textContent =
+      '⏱ Verarbeitung läuft seit ' + secs.toFixed(1).replace('.', ',') + ' Sekunden...';
+  }, 100);
+
+  // Status rotation: fade out → change text → fade in every 4s
+  let idx = 0;
+  state.statusInterval = setInterval(() => {
+    const el = document.getElementById('proc-status');
+    el.classList.add('fading');
+    setTimeout(() => {
+      idx = (idx + 1) % STATUS_MESSAGES.length;
+      el.textContent = STATUS_MESSAGES[idx];
+      el.classList.remove('fading');
+    }, 380);
+  }, 4000);
+}
+
+function stopLoadingIndicator(callback) {
+  clearInterval(state.timerInterval);
+  clearInterval(state.statusInterval);
+  state.timerInterval = null;
+  state.statusInterval = null;
+
+  // Completion state: solid bar + success text
+  document.getElementById('proc-shimmer-bar').classList.add('complete');
+  const statusEl = document.getElementById('proc-status');
+  statusEl.classList.remove('fading');
+  statusEl.textContent = '✓ Analyse abgeschlossen';
+  statusEl.classList.add('done');
+
+  // 800ms pause, then run callback
+  setTimeout(() => { if (callback) callback(); }, 800);
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1177,8 +1312,7 @@ function activateDemoMode() {
    SCREEN 2 → 3: RESULTS
    ═════════════════════════════════════════════════════════════════ */
 function transitionToResults() {
-  const r = state.result;
-  if (!r) { activateDemoMode(); }
+  if (!state.result) { activateDemoMode(); }
   const result = state.result;
 
   // Header
@@ -1249,10 +1383,11 @@ function transitionToResults() {
     reviewList.appendChild(div);
   });
 
-  showScreen('screen-results');
-
-  // Staggered reveal + count-up
-  revealResults(result);
+  // Stop loading indicator → 800ms pause → show results
+  stopLoadingIndicator(() => {
+    showScreen('screen-results');
+    revealResults(result);
+  });
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1322,12 +1457,25 @@ function downloadReport() {
    RESET
    ═════════════════════════════════════════════════════════════════ */
 function resetToStart() {
+  // Clear all intervals
+  clearInterval(state.dotsInterval);
+  clearInterval(state.timerInterval);
+  clearInterval(state.statusInterval);
+
   // Reset state
   state = {
     company: '', year: '', type: '', file: null,
     runId: null, result: null, demoMode: false,
-    pollInterval: null, dotsInterval: null,
+    dotsInterval: null, timerInterval: null, statusInterval: null, startTime: null,
   };
+
+  // Reset loading indicator DOM
+  document.getElementById('proc-timer').textContent = '⏱ Verarbeitung läuft seit 0,0 Sekunden...';
+  const shimmerBar = document.getElementById('proc-shimmer-bar');
+  shimmerBar.classList.remove('complete');
+  const statusEl = document.getElementById('proc-status');
+  statusEl.classList.remove('fading', 'done');
+  statusEl.textContent = STATUS_MESSAGES[0];
 
   // Reset form
   document.getElementById('company-name').value = '';
