@@ -353,19 +353,18 @@
       background: rgba(201,168,76,0.15);
     }
 
-    /* Pulse animation for active step — verstärkt */
+    /* Spinner animation for active step */
     .pipeline-step.active .step-indicator::after {
       content: '';
-      position: absolute; inset: -12px;
+      position: absolute; inset: -5px;
       border-radius: 50%;
-      border: 2px solid var(--gold);
-      opacity: 0;
-      animation: pulse-ring 2.2s ease-out infinite;
-      box-shadow: 0 0 14px rgba(201,168,76,0.45);
+      border: 2px solid transparent;
+      border-top-color: var(--gold);
+      border-right-color: rgba(201,168,76,0.35);
+      animation: spin 0.9s linear infinite;
     }
-    @keyframes pulse-ring {
-      0%   { transform: scale(0.78); opacity: 0.85; }
-      100% { transform: scale(1.65); opacity: 0; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* ─── Processing Footer (Timer · Shimmer · Status) ─────────── */
@@ -976,7 +975,7 @@
 /* ═════════════════════════════════════════════════════════════════
    WEBHOOK
    ═════════════════════════════════════════════════════════════════ */
-const WEBHOOK_URL = 'http://localhost:5678/webhook/tax-report';
+const WEBHOOK_URL = 'http://178.104.65.171:5678/webhook/tax-report';
 
 /* ═════════════════════════════════════════════════════════════════
    STATE
@@ -1170,55 +1169,60 @@ function stopLoadingIndicator(callback) {
 
 /* ═════════════════════════════════════════════════════════════════
    PIPELINE ANIMATION
-   Timings: 1.5, 3.0, 5.0, 8.0, 10.0, 12.0 s
+   Alle Steps sofort aktiv (Spinner) — abschließen wenn Backend antwortet
    ═════════════════════════════════════════════════════════════════ */
-const STEP_TIMINGS = [1500, 3000, 5000, 8000, 10000, 12000];
-
 function runPipeline() {
-  // reset all steps
+  // Alle Steps zurücksetzen und sofort als aktiv (Spinner) markieren
   for (let i = 0; i < 6; i++) {
     const el = document.getElementById('step-' + i);
-    el.classList.remove('active', 'done');
+    el.classList.remove('done');
+    el.classList.add('active');
   }
 
-  // activate step 0 immediately
-  activateStep(0);
-
-  STEP_TIMINGS.forEach((ms, idx) => {
-    setTimeout(() => {
-      completeStep(idx);
-      if (idx + 1 < 6) activateStep(idx + 1);
-    }, ms);
-  });
-
-  // After last step → signal pipeline done, then check webhook
-  setTimeout(() => {
+  // Pipeline ist bereit — auf Webhook warten
+  state.pipelineDone = true;
+  if (state.webhookDone || state.result) {
+    // Webhook war schon fertig (sehr unwahrscheinlich, aber korrekt)
     clearInterval(state.dotsInterval);
-    state.pipelineDone = true;
-    if (state.webhookDone || state.result) {
-      transitionToResults(); // Webhook war schon fertig → sofort wechseln
-    } else {
-      // Warte auf Webhook (max 120s ab Pipeline-Ende)
-      const waitStart = Date.now();
-      state.waitInterval = setInterval(() => {
-        if (state.result) {
-          clearInterval(state.waitInterval);
-          state.waitInterval = null;
-          transitionToResults();
-        } else if (Date.now() - waitStart > 120000) {
-          clearInterval(state.waitInterval);
-          state.waitInterval = null;
-          activateDemoMode();
-          transitionToResults();
-        }
-      }, 300);
-    }
-  }, 12000);
+    completePipelineSteps();
+    if (!state.result) activateDemoMode();
+    transitionToResults();
+  } else {
+    // Warte auf Webhook (max 120s)
+    const waitStart = Date.now();
+    state.waitInterval = setInterval(() => {
+      if (state.result) {
+        clearInterval(state.waitInterval);
+        state.waitInterval = null;
+        clearInterval(state.dotsInterval);
+        completePipelineSteps();
+        transitionToResults();
+      } else if (state.webhookDone) {
+        // Webhook fertig aber kein result → Demo-Fallback
+        clearInterval(state.waitInterval);
+        state.waitInterval = null;
+        clearInterval(state.dotsInterval);
+        completePipelineSteps();
+        activateDemoMode();
+        transitionToResults();
+      } else if (Date.now() - waitStart > 120000) {
+        clearInterval(state.waitInterval);
+        state.waitInterval = null;
+        clearInterval(state.dotsInterval);
+        completePipelineSteps();
+        activateDemoMode();
+        transitionToResults();
+      }
+    }, 300);
+  }
 }
 
-function activateStep(idx) {
-  document.getElementById('step-' + idx).classList.add('active');
+function completePipelineSteps() {
+  for (let i = 0; i < 6; i++) {
+    completeStep(i);
+  }
 }
+
 function completeStep(idx) {
   const el = document.getElementById('step-' + idx);
   el.classList.remove('active');
@@ -1273,9 +1277,9 @@ async function callWebhook() {
   }
   state.webhookDone = true;
   console.log('webhookDone=true, pipelineDone=', state.pipelineDone, ', result=', !!state.result);
-  if (state.pipelineDone) {
-    transitionToResults(); // Pipeline war schon fertig → sofort wechseln
-  }
+  // Das waitInterval in runPipeline() erkennt webhookDone und übernimmt die Steuerung.
+  // Kein direkter transitionToResults()-Aufruf hier nötig — das waitInterval-Polling
+  // prüft state.result und state.webhookDone alle 300ms.
 }
 
 function readFileAsText(file) {
