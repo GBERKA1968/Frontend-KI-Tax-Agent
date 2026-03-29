@@ -1262,12 +1262,14 @@ async function callWebhook() {
     if (resp.ok) {
       const data = await resp.json();
       console.log('Webhook data:', JSON.stringify(data).substring(0, 300));
-      if (data && data.success) {
+      // Akzeptiere die Response wenn sie die erwarteten Felder enthält,
+      // unabhängig davon ob "success" vorhanden ist oder nicht
+      if (data && (data.success || data.koerperschaftsteuer != null || data.run_id)) {
         if (data.run_id) state.runId = data.run_id;
         state.result = data;
         console.log('state.result gesetzt, run_id:', state.result.run_id);
       } else {
-        console.warn('Webhook: success=false oder kein success-Feld', data);
+        console.warn('Webhook: unerwartetes Response-Format', data);
       }
     } else {
       console.warn('Webhook HTTP-Fehler:', resp.status, resp.statusText);
@@ -1375,9 +1377,13 @@ function transitionToResults() {
     result.automation_rate + '%';
 
   // Steuerpflichtiges Einkommen
+  // Mögliche Feldnamen die das Backend liefern kann
   const taxIncomeEl = document.getElementById('kpi-taxincome');
-  if (result.steuerpflichtiges_einkommen != null) {
-    taxIncomeEl.textContent = '€ ' + formatNum(result.steuerpflichtiges_einkommen);
+  const taxIncome = result.steuerpflichtiges_einkommen
+    ?? result.taxable_income
+    ?? result.zu_versteuerndes_einkommen;
+  if (taxIncome != null) {
+    taxIncomeEl.textContent = '€ ' + formatNum(taxIncome);
   } else {
     taxIncomeEl.textContent = '—';
   }
