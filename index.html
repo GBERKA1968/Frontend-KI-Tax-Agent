@@ -975,7 +975,7 @@
 /* ═════════════════════════════════════════════════════════════════
    WEBHOOK
    ═════════════════════════════════════════════════════════════════ */
-const WEBHOOK_URL = 'http://178.104.65.171:5678/webhook/tax-report';
+const WEBHOOK_URL = 'https://n8n.junglex.eu/webhook/tax-report';
 
 /* ═════════════════════════════════════════════════════════════════
    STATE
@@ -1188,8 +1188,7 @@ function runPipeline() {
     if (!state.result) activateDemoMode();
     transitionToResults();
   } else {
-    // Warte auf Webhook (max 120s)
-    const waitStart = Date.now();
+    // Warte auf Webhook (kein Timeout — wartet bis Backend antwortet)
     state.waitInterval = setInterval(() => {
       if (state.result) {
         clearInterval(state.waitInterval);
@@ -1199,13 +1198,6 @@ function runPipeline() {
         transitionToResults();
       } else if (state.webhookDone) {
         // Webhook fertig aber kein result → Demo-Fallback
-        clearInterval(state.waitInterval);
-        state.waitInterval = null;
-        clearInterval(state.dotsInterval);
-        completePipelineSteps();
-        activateDemoMode();
-        transitionToResults();
-      } else if (Date.now() - waitStart > 120000) {
         clearInterval(state.waitInterval);
         state.waitInterval = null;
         clearInterval(state.dotsInterval);
@@ -1230,7 +1222,7 @@ function completeStep(idx) {
 }
 
 /* ═════════════════════════════════════════════════════════════════
-   WEBHOOK CALL (synchron — wartet auf Eliasv2-Antwort, max 120s)
+   WEBHOOK CALL (synchron — wartet auf Eliasv2-Antwort, kein Timeout)
    ═════════════════════════════════════════════════════════════════ */
 async function callWebhook() {
   if (!state.file) {
@@ -1249,15 +1241,11 @@ async function callWebhook() {
     };
     console.log('Sending to webhook:', WEBHOOK_URL);
     console.log('Payload size:', JSON.stringify(payload).length, 'bytes');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: controller.signal,
     });
-    clearTimeout(timeoutId);
     console.log('Webhook status:', resp.status);
     if (resp.ok) {
       const data = await resp.json();
