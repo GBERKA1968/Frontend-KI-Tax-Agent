@@ -1477,31 +1477,11 @@ function countUp(elId, target, duration, formatter) {
 /* ═════════════════════════════════════════════════════════════════
    DOWNLOAD
    ═════════════════════════════════════════════════════════════════ */
-async function downloadReport() {
-  const btn = document.getElementById('btn-download');
-  btn.disabled = true;
-  btn.textContent = '⏳ Download läuft...';
-  try {
-    const resp = await fetch(WEBHOOK_URL + '-download');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const blob = await resp.blob();
-    const filename = (resp.headers.get('Content-Disposition') || '')
-      .match(/filename="?([^";\n]+)"?/)?.[1] || 'KoeSt_Report.docx';
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error('Download fehlgeschlagen:', err);
-    alert('Download fehlgeschlagen: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '📥  DOCX-Report herunterladen';
-  }
+function downloadReport() {
+  // Direkter Browser-Download via Navigation — umgeht CORS-Einschränkungen.
+  // Der Server liefert Content-Disposition: attachment, daher startet
+  // der Browser automatisch den Download statt die Seite zu verlassen.
+  window.location.href = WEBHOOK_URL + '-download';
 }
 
 /* ═════════════════════════════════════════════════════════════════
