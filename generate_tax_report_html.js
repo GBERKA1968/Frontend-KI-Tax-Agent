@@ -684,7 +684,7 @@ const html = `<!DOCTYPE html>
           <td>${h.description || h.label || '—'}</td>
           <td><span class="mehr">+MEHR</span></td>
           <td class="amount mehr">+ ${fmt(h.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal('${(h.account_number || h.rule_id || '').replace(/'/g, "\\'")}', '${(h.description || h.label || '').replace(/'/g, "\\'")}', 'Hinzurechnung', '${h.amount || 0}', '${(h.tax_treatment || '').replace(/'/g, "\\'")}', '${(h.legal_basis || '').replace(/'/g, "\\'")}')">? Fragen</button></td>
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: h.description||h.label||'', direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||'', legal_basis: h.legal_basis||''}).replace(/"/g, '&quot;')})">? Fragen</button></td>
         </tr>`).join('') : `<tr><td colspan="5" class="empty-state">Keine Hinzurechnungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Hinzurechnungen</td>
@@ -699,7 +699,7 @@ const html = `<!DOCTYPE html>
           <td>${k.description || k.label || '—'}</td>
           <td><span class="weniger">−WENIGER</span></td>
           <td class="amount weniger">− ${fmt(k.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal('${(k.account_number || k.rule_id || '').replace(/'/g, "\\'")}', '${(k.description || k.label || '').replace(/'/g, "\\'")}', 'Kürzung', '${k.amount || 0}', '${(k.tax_treatment || '').replace(/'/g, "\\'")}', '${(k.legal_basis || '').replace(/'/g, "\\'")}')">? Fragen</button></td>
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: k.description||k.label||'', direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||'', legal_basis: k.legal_basis||''}).replace(/"/g, '&quot;')})">? Fragen</button></td>
         </tr>`).join('') : `<tr><td colspan="5" class="empty-state">Keine Kürzungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Kürzungen</td>
@@ -933,12 +933,19 @@ ${renderAuditSummarySection(reportData)}
   'use strict';
   let currentCtx = {};
 
-  window.openAskModal = function(accountNumber, description, direction, amount, taxTreatment, legalBasis) {
-    currentCtx = { account_number: accountNumber, description: description, direction: direction, amount: amount, tax_treatment: taxTreatment, legal_basis: legalBasis };
+  window.openAskModal = function(ctx) {
+    if (typeof ctx === 'string') { try { ctx = JSON.parse(ctx); } catch(e) { ctx = {}; } }
+    currentCtx = ctx || {};
+    var accountNumber = currentCtx.account_number || '';
+    var description = currentCtx.description || '';
+    var direction = currentCtx.direction || '';
+    var amount = currentCtx.amount;
+    var taxTreatment = currentCtx.tax_treatment || '';
+    var legalBasis = currentCtx.legal_basis || '';
     const ctxEl = document.getElementById('askContext');
     ctxEl.innerHTML = '<strong>' + (accountNumber || '—') + '</strong> · ' + (description || '—') + '<br>' +
       '<span style="color:' + (direction === 'Hinzurechnung' ? 'var(--red)' : 'var(--green)') + '">' + direction + '</span>' +
-      ' · <strong>' + (amount ? Number(amount).toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' \\u20AC' : '—') + '</strong>' +
+      ' · <strong>' + (amount ? Number(amount).toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' \u20AC' : '—') + '</strong>' +
       (taxTreatment ? '<br>Behandlung: ' + taxTreatment : '') +
       (legalBasis ? '<br>Rechtsgrundlage: ' + legalBasis : '');
     document.getElementById('askQuestion').value = '';
