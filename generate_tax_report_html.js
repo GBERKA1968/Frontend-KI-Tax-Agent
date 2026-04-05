@@ -613,8 +613,8 @@ const html = `<!DOCTYPE html>
 <header>
   <div class="header-top">
     <div>
-      <div class="header-brand">Eliasv2 · KI-gestützte Steuerautomatisierung</div>
-      <div class="header-title">${header.title || 'Körperschaftsteuererklärung'} ${ctx.tax_year || ''}</div>
+      <div class="header-brand">Elias · KI-gestützte Steuerautomatisierung</div>
+      <div class="header-title">${header.title ? header.title : ('Körperschaftsteuererklärung ' + (ctx.tax_year || ''))}</div>
       <div class="header-subtitle">${header.company || '—'} · ${header.company_type || '—'} · Steuerperiode ${ctx.tax_year || '—'}</div>
     </div>
     <div class="header-meta">
@@ -678,14 +678,20 @@ const html = `<!DOCTYPE html>
           <td class="amount">${fmt(mwr.ausgangswert?.amount)}</td>
           <td class="no-print"></td>
         </tr>
-        ${hinzu.length > 0 ? hinzu.map(h => `
+        ${hinzu.length > 0 ? hinzu.map(h => {
+          const hReasoning = h.reasoning || (h.assessment && h.assessment.reasoning) || '';
+          return `
         <tr>
           <td class="td-mono" style="color:var(--red)">${h.rule_id || '—'}</td>
           <td>${h.description || h.label || '—'}</td>
           <td><span class="mehr">+MEHR</span></td>
           <td class="amount mehr">+ ${fmt(h.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: h.description||h.label||'', direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: h.reasoning||(h.assessment&&h.assessment.reasoning)||'', assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>`).join('') : `<tr><td colspan="5" class="empty-state">Keine Hinzurechnungen</td></tr>`}
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: h.description||h.label||'', direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: hReasoning, assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>${hReasoning ? `
+        <tr>
+          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${hReasoning}</td>
+        </tr>` : ''}`;
+        }).join('') : `<tr><td colspan="5" class="empty-state">Keine Hinzurechnungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Hinzurechnungen</td>
           <td>Summe Mehr</td>
@@ -693,14 +699,20 @@ const html = `<!DOCTYPE html>
           <td class="amount mehr">+ ${fmt(mwr.hinzurechnungen_summe?.value)}</td>
           <td class="no-print"></td>
         </tr>
-        ${kuerzungen.length > 0 ? kuerzungen.map(k => `
+        ${kuerzungen.length > 0 ? kuerzungen.map(k => {
+          const kReasoning = k.reasoning || (k.assessment && k.assessment.reasoning) || '';
+          return `
         <tr>
           <td class="td-mono" style="color:var(--green)">${k.rule_id || '—'}</td>
           <td>${k.description || k.label || '—'}</td>
           <td><span class="weniger">−WENIGER</span></td>
           <td class="amount weniger">− ${fmt(k.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: k.description||k.label||'', direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: k.reasoning||(k.assessment&&k.assessment.reasoning)||'', assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>`).join('') : `<tr><td colspan="5" class="empty-state">Keine Kürzungen</td></tr>`}
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: k.description||k.label||'', direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: kReasoning, assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>${kReasoning ? `
+        <tr>
+          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${kReasoning}</td>
+        </tr>` : ''}`;
+        }).join('') : `<tr><td colspan="5" class="empty-state">Keine Kürzungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Kürzungen</td>
           <td>Summe Weniger</td>
@@ -838,7 +850,18 @@ const html = `<!DOCTYPE html>
       <span class="section-title">Human Review — Offene Punkte</span>
       <span class="badge badge-warn">${humanReview.length} Item${humanReview.length !== 1 ? 's' : ''}</span>
     </div>
-    ${humanReview.map(item => `
+    ${humanReview.map(item => {
+      let issueText = item.issue || '—';
+      if (issueText.startsWith('LLM-Antwort hatte kein erkanntes Format')) {
+        issueText = 'Automatische Bewertung nicht möglich — manuelle Prüfung erforderlich';
+        if (item.account_number) issueText += '<br><span style="font-family:DM Mono,monospace;font-size:11px;color:var(--gold-muted)">Konto ' + (item.account_number || '') + (item.account_name ? ': ' + item.account_name : '') + '</span>';
+      } else if (issueText.length > 120) {
+        issueText = issueText.substring(0, 117) + '…';
+      }
+      let recText = item.recommendation || '—';
+      if (recText !== '—' && !recText.startsWith('Empfehlung:')) recText = 'Empfehlung: ' + recText;
+      if (recText.length > 150) recText = recText.substring(0, 147) + '…';
+      return `
     <div class="review-item ${(item.materiality_level || '').toLowerCase()}">
       <div class="review-item-header">
         <span class="review-account">Konto ${item.account_number || '—'}</span>
@@ -847,9 +870,10 @@ const html = `<!DOCTYPE html>
           <span class="badge" style="background:var(--navy);color:var(--gold)">Prio ${item.priority || '—'}</span>
         </div>
       </div>
-      <div class="review-issue">${item.issue || '—'}</div>
-      <div class="review-rec">→ ${item.recommendation || '—'}</div>
-    </div>`).join('')}
+      <div class="review-issue">${issueText}</div>
+      <div class="review-rec">→ ${recText}</div>
+    </div>`;
+    }).join('')}
   </div>` : ''}
 
   <!-- SECTION 6: VERSION SNAPSHOT -->
@@ -897,7 +921,7 @@ const html = `<!DOCTYPE html>
 
 <footer>
   <div>
-    <strong>Eliasv2</strong> · KI-gestützte Körperschaftsteuer-Automatisierung ·
+    <strong>Elias</strong> · KI-gestützte Körperschaftsteuer-Automatisierung ·
     Kein Ersatz für professionelle Steuerberatung
   </div>
   <div>
