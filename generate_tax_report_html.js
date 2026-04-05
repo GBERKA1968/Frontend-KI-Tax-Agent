@@ -680,17 +680,22 @@ const html = `<!DOCTYPE html>
         </tr>
         ${hinzu.length > 0 ? hinzu.map(h => {
           const hReasoning = h.reasoning || (h.assessment && h.assessment.reasoning) || '';
+          const hDesc = h.description || h.position || h.account_name || h.label || '';
+          const hFallback = h.tax_treatment || (h.assessment && h.assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--red)">${h.rule_id || '—'}</td>
-          <td>${h.description || h.label || '—'}</td>
+          <td>${hDesc || '—'}</td>
           <td><span class="mehr">+MEHR</span></td>
           <td class="amount mehr">+ ${fmt(h.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: h.description||h.label||'', direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: hReasoning, assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>${hReasoning ? `
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: hDesc, direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: hReasoning, assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>
         <tr>
-          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${hReasoning}</td>
-        </tr>` : ''}`;
+          <td colspan="5" style="padding:1px 14px 2px;border-bottom:none">
+            ${hDesc ? `<div style="font-size:12px;color:#ccd6e8;font-weight:600">${hDesc}</div>` : ''}
+            <div style="font-size:11px;color:var(--gray);font-style:italic;padding-bottom:6px;border-bottom:1px solid var(--gray-light)">↳ ${hReasoning || hFallback || 'Keine Begründung verfügbar'}</div>
+          </td>
+        </tr>`;
         }).join('') : `<tr><td colspan="5" class="empty-state">Keine Hinzurechnungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Hinzurechnungen</td>
@@ -701,17 +706,22 @@ const html = `<!DOCTYPE html>
         </tr>
         ${kuerzungen.length > 0 ? kuerzungen.map(k => {
           const kReasoning = k.reasoning || (k.assessment && k.assessment.reasoning) || '';
+          const kDesc = k.description || k.position || k.account_name || k.label || '';
+          const kFallback = k.tax_treatment || (k.assessment && k.assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--green)">${k.rule_id || '—'}</td>
-          <td>${k.description || k.label || '—'}</td>
+          <td>${kDesc || '—'}</td>
           <td><span class="weniger">−WENIGER</span></td>
           <td class="amount weniger">− ${fmt(k.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: k.description||k.label||'', direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: kReasoning, assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>${kReasoning ? `
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: kDesc, direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: kReasoning, assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>
         <tr>
-          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${kReasoning}</td>
-        </tr>` : ''}`;
+          <td colspan="5" style="padding:1px 14px 2px;border-bottom:none">
+            ${kDesc ? `<div style="font-size:12px;color:#ccd6e8;font-weight:600">${kDesc}</div>` : ''}
+            <div style="font-size:11px;color:var(--gray);font-style:italic;padding-bottom:6px;border-bottom:1px solid var(--gray-light)">↳ ${kReasoning || kFallback || 'Keine Begründung verfügbar'}</div>
+          </td>
+        </tr>`;
         }).join('') : `<tr><td colspan="5" class="empty-state">Keine Kürzungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Kürzungen</td>
