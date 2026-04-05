@@ -680,17 +680,22 @@ const html = `<!DOCTYPE html>
         </tr>
         ${hinzu.length > 0 ? hinzu.map(h => {
           const hReasoning = h.reasoning || (h.assessment && h.assessment.reasoning) || '';
+          const hDesc = h.description || h.position || h.account_name || h.label || '';
+          const hFallback = h.tax_treatment || (h.assessment && h.assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--red)">${h.rule_id || '—'}</td>
-          <td>${h.description || h.label || '—'}</td>
+          <td>${hDesc || '—'}</td>
           <td><span class="mehr">+MEHR</span></td>
           <td class="amount mehr">+ ${fmt(h.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: h.description||h.label||'', direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: hReasoning, assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>${hReasoning ? `
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: h.account_number||h.rule_id||'', description: hDesc, direction: 'Hinzurechnung', amount: h.amount||0, tax_treatment: h.tax_treatment||(h.assessment&&h.assessment.tax_treatment)||'', legal_basis: Array.isArray(h.legal_basis)?h.legal_basis.join(', '):(h.legal_basis||''), reasoning: hReasoning, assessment_source: h.assessment_source||'', confidence: h.confidence||(h.assessment&&h.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>
         <tr>
-          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${hReasoning}</td>
-        </tr>` : ''}`;
+          <td colspan="5" style="padding:1px 14px 2px;border-bottom:none">
+            ${hDesc ? `<div style="font-size:12px;color:#ccd6e8;font-weight:600">${hDesc}</div>` : ''}
+            <div style="font-size:11px;color:var(--gray);font-style:italic;padding-bottom:6px;border-bottom:1px solid var(--gray-light)">↳ ${hReasoning || hFallback || 'Keine Begründung verfügbar'}</div>
+          </td>
+        </tr>`;
         }).join('') : `<tr><td colspan="5" class="empty-state">Keine Hinzurechnungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Hinzurechnungen</td>
@@ -701,17 +706,22 @@ const html = `<!DOCTYPE html>
         </tr>
         ${kuerzungen.length > 0 ? kuerzungen.map(k => {
           const kReasoning = k.reasoning || (k.assessment && k.assessment.reasoning) || '';
+          const kDesc = k.description || k.position || k.account_name || k.label || '';
+          const kFallback = k.tax_treatment || (k.assessment && k.assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--green)">${k.rule_id || '—'}</td>
-          <td>${k.description || k.label || '—'}</td>
+          <td>${kDesc || '—'}</td>
           <td><span class="weniger">−WENIGER</span></td>
           <td class="amount weniger">− ${fmt(k.amount)}</td>
-          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: k.description||k.label||'', direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: kReasoning, assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
-        </tr>${kReasoning ? `
+          <td class="no-print" style="text-align:center"><button class="ask-btn" onclick="openAskModal(${JSON.stringify({account_number: k.account_number||k.rule_id||'', description: kDesc, direction: 'Kürzung', amount: k.amount||0, tax_treatment: k.tax_treatment||(k.assessment&&k.assessment.tax_treatment)||'', legal_basis: Array.isArray(k.legal_basis)?k.legal_basis.join(', '):(k.legal_basis||''), reasoning: kReasoning, assessment_source: k.assessment_source||'', confidence: k.confidence||(k.assessment&&k.assessment.confidence)||null}).replace(/"/g, '&quot;')})">? Fragen</button></td>
+        </tr>
         <tr>
-          <td colspan="5" style="font-size:11px;color:var(--gray);padding:2px 14px 8px;font-style:italic;border-bottom:1px solid var(--gray-light)">↳ ${kReasoning}</td>
-        </tr>` : ''}`;
+          <td colspan="5" style="padding:1px 14px 2px;border-bottom:none">
+            ${kDesc ? `<div style="font-size:12px;color:#ccd6e8;font-weight:600">${kDesc}</div>` : ''}
+            <div style="font-size:11px;color:var(--gray);font-style:italic;padding-bottom:6px;border-bottom:1px solid var(--gray-light)">↳ ${kReasoning || kFallback || 'Keine Begründung verfügbar'}</div>
+          </td>
+        </tr>`;
         }).join('') : `<tr><td colspan="5" class="empty-state">Keine Kürzungen</td></tr>`}
         <tr class="mwr-subtotal">
           <td class="td-mono">Kürzungen</td>
@@ -851,27 +861,37 @@ const html = `<!DOCTYPE html>
       <span class="badge badge-warn">${humanReview.length} Item${humanReview.length !== 1 ? 's' : ''}</span>
     </div>
     ${humanReview.map(item => {
-      let issueText = item.issue || '—';
-      if (issueText.startsWith('LLM-Antwort hatte kein erkanntes Format')) {
-        issueText = 'Automatische Bewertung nicht möglich — manuelle Prüfung erforderlich';
-        if (item.account_number) issueText += '<br><span style="font-family:DM Mono,monospace;font-size:11px;color:var(--gold-muted)">Konto ' + (item.account_number || '') + (item.account_name ? ': ' + item.account_name : '') + '</span>';
-      } else if (issueText.length > 120) {
-        issueText = issueText.substring(0, 117) + '…';
+      const rawIssue = item.issue || '';
+      let issueText;
+      if (/Confidence|LLM-Antwort|Format/i.test(rawIssue)) {
+        issueText = 'Die automatische Steuerbeurteilung konnte nicht abgeschlossen werden. Bitte prüfen Sie die steuerliche Behandlung manuell und dokumentieren Sie Ihre Entscheidung im Arbeitsbogen.';
+      } else if (/HIGH|Materialit/i.test(rawIssue)) {
+        issueText = 'Dieser Betrag überschreitet die Materialitätsschwelle. Bitte lassen Sie diese Position von einem Senior-Steuerberater prüfen.';
+      } else if (/Vorjahr|prior_year|Abweichung/i.test(rawIssue)) {
+        issueText = 'Die Abweichung zum Vorjahr ist ungewöhnlich hoch. Bitte prüfen Sie ob außerordentliche Ereignisse vorliegen.';
+      } else {
+        issueText = 'Bitte prüfen Sie diese Position manuell und dokumentieren Sie Ihre steuerliche Beurteilung.';
       }
-      let recText = item.recommendation || '—';
-      if (recText !== '—' && !recText.startsWith('Empfehlung:')) recText = 'Empfehlung: ' + recText;
+      const rawRec = item.recommendation || '';
+      let recText;
+      if (rawRec && !/^LLM-Antwort/i.test(rawRec)) {
+        recText = (rawRec.startsWith('Empfehlung:') ? rawRec : 'Empfehlung: ' + rawRec);
+      } else {
+        recText = 'Empfehlung: Konsultieren Sie einen Steuerberater.';
+      }
       if (recText.length > 150) recText = recText.substring(0, 147) + '…';
+      const titel = 'Konto ' + (item.account_number || '—') + (item.account_name ? ' — ' + item.account_name : '');
       return `
     <div class="review-item ${(item.materiality_level || '').toLowerCase()}">
       <div class="review-item-header">
-        <span class="review-account">Konto ${item.account_number || '—'}</span>
+        <span class="review-account" style="color:var(--gold);font-weight:700">${titel}</span>
         <div style="display:flex;gap:8px;align-items:center">
           ${statusBadge(item.materiality_level)}
-          <span class="badge" style="background:var(--navy);color:var(--gold)">Prio ${item.priority || '—'}</span>
+          <span class="badge" style="background:var(--gold);color:var(--navy);font-weight:700">P${item.priority || '—'}</span>
         </div>
       </div>
-      <div class="review-issue">${issueText}</div>
-      <div class="review-rec">→ ${recText}</div>
+      <div class="review-issue" style="margin-top:6px">${issueText}</div>
+      <div class="review-rec" style="margin-top:4px">→ ${recText}</div>
     </div>`;
     }).join('')}
   </div>` : ''}
