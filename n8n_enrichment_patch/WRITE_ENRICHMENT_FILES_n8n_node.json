@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "description": "n8n Code Node: WRITE_ENRICHMENT_FILES — Schreibt Enrichment-Dateien aus dem Webhook-Payload auf den Server. Zwischen VALIDATE_INPUT und PREPARE_CSV_BINARY einfügen."
+  },
+  "node": {
+    "parameters": {
+      "jsCode": "const input = $input.first().json;\nconst enrichmentFiles = input.enrichment_files || {};\nconst taxYear = input.tax_year || '2024';\nconst fs = require('fs');\n\nconst basePath = '/files/inbox/enrichment';\n\ntry {\n  if (!fs.existsSync(basePath)) {\n    fs.mkdirSync(basePath, { recursive: true });\n  }\n} catch (e) {\n  console.log('Verzeichnis existiert bereits:', e.message);\n}\n\nconst mapping = {\n  'enrichment_beteiligungsspiegel': `enrichment_beteiligungsspiegel_${taxYear}.txt`,\n  'enrichment_bewirtung': `enrichment_bewirtung_${taxYear}.txt`,\n  'enrichment_spenden': `enrichment_spenden_${taxYear}.txt`,\n  'enrichment_darlehen': `enrichment_darlehen_${taxYear}.txt`,\n  'enrichment_vertrag': `enrichment_vertrag_${taxYear}.txt`,\n};\n\nconst written = [];\nconst errors = [];\n\nfor (const [key, filename] of Object.entries(mapping)) {\n  if (enrichmentFiles[key] && enrichmentFiles[key].trim().length > 0) {\n    const filepath = basePath + '/' + filename;\n    try {\n      fs.writeFileSync(filepath, enrichmentFiles[key], 'utf-8');\n      const stats = fs.statSync(filepath);\n      written.push({ key, filename, filepath, size_bytes: stats.size });\n      console.log(`✓ ${filename} geschrieben (${stats.size} bytes)`);\n    } catch (err) {\n      errors.push({ key, error: err.message });\n      console.error(`✗ Fehler bei ${filename}: ${err.message}`);\n    }\n  }\n}\n\nconsole.log(`Enrichment: ${written.length} Datei(en) geschrieben, ${errors.length} Fehler`);\n\nconst { enrichment_files, ...restInput } = input;\n\nreturn [{\n  json: {\n    ...restInput,\n    enrichment_files_written: written.map(w => w.filename),\n    enrichment_files_count: written.length,\n    enrichment_files_details: written,\n    enrichment_errors: errors,\n  }\n}];"
+    },
+    "name": "WRITE_ENRICHMENT_FILES",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [0, 0]
+  }
+}
