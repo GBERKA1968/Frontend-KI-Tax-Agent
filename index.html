@@ -794,6 +794,29 @@
       </button>
 
       <div class="card-footer">Unterstützte Formate: Excel · PDF · Word · CSV · TXT · JSON</div>
+
+      <!-- ─── Enrichment Upload (optional) ─── -->
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--gold);margin-bottom:4px">
+          Zusatzdokumente <span style="font-weight:400;font-size:0.85rem;color:var(--text-dim)">(optional)</span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+          Beteiligungsspiegel, Bewirtungsbelege etc. — Dateinamen müssen enthalten:
+          <span style="color:var(--gold-dim)">beteiligungsspiegel</span>,
+          <span style="color:var(--gold-dim)">bewirtung</span>,
+          <span style="color:var(--gold-dim)">spenden</span>,
+          <span style="color:var(--gold-dim)">darlehen</span> oder
+          <span style="color:var(--gold-dim)">vertrag</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px dashed var(--border);border-radius:8px;cursor:pointer;transition:border-color .2s"
+               onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:1.3rem">📎</span>
+          <span style="font-size:0.9rem;color:var(--text-dim)">Zusatzdokumente auswählen (.txt, .csv)</span>
+          <input type="file" id="enrichment-input" accept=".txt,.csv" multiple
+                 style="display:none" onchange="handleEnrichmentSelect(this.files)" />
+        </label>
+        <div id="enrichment-list" style="margin-top:8px;font-size:0.82rem;line-height:1.8"></div>
+      </div>
     </div>
   </section>
 
@@ -1046,6 +1069,52 @@ function removeFile() {
   document.getElementById('btn-start').disabled = true;
 }
 
+/* ─── Enrichment Upload ─── */
+const ENRICHMENT_KEYS = [
+  { pattern: 'beteiligungsspiegel', key: 'enrichment_beteiligungsspiegel', label: 'Beteiligungsspiegel' },
+  { pattern: 'bewirtung',           key: 'enrichment_bewirtung',           label: 'Bewirtungsbelege' },
+  { pattern: 'spenden',             key: 'enrichment_spenden',             label: 'Spendenliste' },
+  { pattern: 'darlehen',            key: 'enrichment_darlehen',            label: 'Darlehensübersicht' },
+  { pattern: 'vertrag',             key: 'enrichment_vertrag',             label: 'Vertragsdokument' },
+];
+
+state.enrichmentFiles = [];
+
+function handleEnrichmentSelect(files) {
+  state.enrichmentFiles = Array.from(files);
+  const listEl = document.getElementById('enrichment-list');
+  listEl.innerHTML = '';
+  state.enrichmentFiles.forEach(f => {
+    const name = f.name.toLowerCase();
+    const match = ENRICHMENT_KEYS.find(e => name.includes(e.pattern));
+    const div = document.createElement('div');
+    if (match) {
+      div.style.color = '#c9a84c';
+      div.textContent = '✓ ' + match.label + ' erkannt — ' + f.name;
+    } else {
+      div.style.color = '#4a6080';
+      div.textContent = '○ Unbekannter Typ — ' + f.name + ' (wird als "Sonstige" gesendet)';
+    }
+    listEl.appendChild(div);
+  });
+}
+
+async function readEnrichmentFiles() {
+  const result = {};
+  for (const f of state.enrichmentFiles) {
+    const name = f.name.toLowerCase();
+    const match = ENRICHMENT_KEYS.find(e => name.includes(e.pattern));
+    const key = match ? match.key : 'enrichment_sonstige';
+    const content = await readFileAsText(f);
+    if (result[key]) {
+      result[key] += '\n\n--- ' + f.name + ' ---\n' + content;
+    } else {
+      result[key] = content;
+    }
+  }
+  return result;
+}
+
 function handleDragOver(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.add('drag-over');
@@ -1233,13 +1302,16 @@ async function callWebhook() {
   }
   try {
     const csvContent = await readFileAsText(state.file);
+    const enrichmentData = await readEnrichmentFiles();
     const payload = {
       csv_content: csvContent,
       company_name: state.company,
       company_type: state.type,
       tax_year: state.year,
+      ...enrichmentData,
     };
     console.log('Sending to webhook:', WEBHOOK_URL);
+    console.log('Enrichment keys:', Object.keys(enrichmentData));
     console.log('Payload size:', JSON.stringify(payload).length, 'bytes');
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
