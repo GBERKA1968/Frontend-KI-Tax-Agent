@@ -41,6 +41,15 @@ const auditTrail = reportData.audit_trail || [];
 const metrics = reportData.run_metrics || {};
 const assessments = reportData.detail_assessments || [];
 
+// Extract numeric value from { value: X }, { amount: X }, or plain number
+function val(obj) {
+  if (obj === null || obj === undefined) return undefined;
+  if (typeof obj === 'number') return obj;
+  if (typeof obj === 'string') { const n = Number(obj); return isNaN(n) ? undefined : n; }
+  if (typeof obj === 'object') return obj.value ?? obj.amount ?? obj.betrag ?? undefined;
+  return undefined;
+}
+
 function fmt(n) {
   if (n === null || n === undefined) return '—';
   return Number(n).toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -629,17 +638,17 @@ const html = `<!DOCTYPE html>
   <div class="header-stats">
     <div class="stat-item">
       <label>Jahresüberschuss</label>
-      <value>${fmt(mwr.ausgangswert?.amount)}</value>
+      <value>${fmt(val(mwr.ausgangswert))}</value>
       <small>lt. G&amp;V</small>
     </div>
     <div class="stat-item">
       <label>Steuerpfl. Einkommen</label>
-      <value>${fmt(mwr.steuerpflichtiges_einkommen?.value)}</value>
+      <value>${fmt(val(mwr.steuerpflichtiges_einkommen))}</value>
       <small>nach MWR</small>
     </div>
     <div class="stat-item">
       <label>Körperschaftsteuer</label>
-      <value>${fmt(mwr.koerperschaftsteuer?.value)}</value>
+      <value>${fmt(val(mwr.koerperschaftsteuer))}</value>
       <small>${mwr.koerperschaftsteuer_rate || '23%'} KöSt</small>
     </div>
     <div class="stat-item">
@@ -675,13 +684,13 @@ const html = `<!DOCTYPE html>
           <td class="td-mono">Ausgangswert</td>
           <td>${mwr.ausgangswert?.label || 'Jahresüberschuss lt. G&V'}</td>
           <td>—</td>
-          <td class="amount">${fmt(mwr.ausgangswert?.amount)}</td>
+          <td class="amount">${fmt(val(mwr.ausgangswert))}</td>
           <td class="no-print"></td>
         </tr>
         ${hinzu.length > 0 ? hinzu.map(h => {
-          const hReasoning = h.reasoning || (h.assessment && h.assessment.reasoning) || '';
+          const hReasoning = h.reasoning || (h.assessment && h.assessment.reasoning) || (h.detail_assessment && h.detail_assessment.reasoning) || h.rationale || '';
           const hDesc = h.description || h.position || h.account_name || h.label || '';
-          const hFallback = h.tax_treatment || (h.assessment && h.assessment.tax_treatment) || '';
+          const hFallback = h.tax_treatment || (h.assessment && h.assessment.tax_treatment) || (h.detail_assessment && h.detail_assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--red)">${h.rule_id || '—'}</td>
@@ -701,13 +710,13 @@ const html = `<!DOCTYPE html>
           <td class="td-mono">Hinzurechnungen</td>
           <td>Summe Mehr</td>
           <td></td>
-          <td class="amount mehr">+ ${fmt(mwr.hinzurechnungen_summe?.value)}</td>
+          <td class="amount mehr">+ ${fmt(val(mwr.hinzurechnungen_summe))}</td>
           <td class="no-print"></td>
         </tr>
         ${kuerzungen.length > 0 ? kuerzungen.map(k => {
-          const kReasoning = k.reasoning || (k.assessment && k.assessment.reasoning) || '';
+          const kReasoning = k.reasoning || (k.assessment && k.assessment.reasoning) || (k.detail_assessment && k.detail_assessment.reasoning) || k.rationale || '';
           const kDesc = k.description || k.position || k.account_name || k.label || '';
-          const kFallback = k.tax_treatment || (k.assessment && k.assessment.tax_treatment) || '';
+          const kFallback = k.tax_treatment || (k.assessment && k.assessment.tax_treatment) || (k.detail_assessment && k.detail_assessment.tax_treatment) || '';
           return `
         <tr>
           <td class="td-mono" style="color:var(--green)">${k.rule_id || '—'}</td>
@@ -727,21 +736,21 @@ const html = `<!DOCTYPE html>
           <td class="td-mono">Kürzungen</td>
           <td>Summe Weniger</td>
           <td></td>
-          <td class="amount weniger">− ${fmt(mwr.kuerzungen_summe?.value)}</td>
+          <td class="amount weniger">− ${fmt(val(mwr.kuerzungen_summe))}</td>
           <td class="no-print"></td>
         </tr>
         <tr class="mwr-total">
           <td class="td-mono">Ergebnis</td>
           <td style="font-weight:600">Steuerpflichtiges Einkommen</td>
           <td></td>
-          <td class="amount">${fmt(mwr.steuerpflichtiges_einkommen?.value)}</td>
+          <td class="amount">${fmt(val(mwr.steuerpflichtiges_einkommen))}</td>
           <td class="no-print"></td>
         </tr>
         <tr class="mwr-total">
           <td class="td-mono">KöSt</td>
           <td style="font-weight:600">Körperschaftsteuer (${mwr.koerperschaftsteuer_rate || '23%'})</td>
           <td></td>
-          <td class="amount">${fmt(mwr.koerperschaftsteuer?.value)}</td>
+          <td class="amount">${fmt(val(mwr.koerperschaftsteuer))}</td>
           <td class="no-print"></td>
         </tr>
         ${mwr.mindest_koerperschaftsteuer_applicable ? `
